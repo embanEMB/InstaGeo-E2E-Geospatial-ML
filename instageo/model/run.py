@@ -277,11 +277,11 @@ class PrithviSegmentationModule(pl.LightningModule):
             A tuple containing the list of optimizers and the list of LR schedulers.
         """
         optimizer = torch.optim.AdamW(
-            self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
+            self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay, betas=(0.95, 0.999)
         )
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
-            optimizer, T_0=10, T_mult=2, eta_min=0
-        )
+            optimizer, T_0=5, T_mult=2, eta_min=0
+        ) # T_0=10,
         return [optimizer], [scheduler]
 
     def log_metrics(

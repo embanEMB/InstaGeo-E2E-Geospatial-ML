@@ -252,7 +252,7 @@ class PrithviSegmentationModule(pl.LightningModule):
 
         # Log loss and ROC-AUC
         # self.log("val_loss", loss, prog_bar=True)
-        self.log_metrics("val_roc_auc", roc_auc)
+        self.log_metrics(outputs, labels, "val_roc_auc", roc_auc)
         return loss
 
     def test_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
@@ -609,6 +609,7 @@ def main(cfg: DictConfig) -> None:
             max_epochs=cfg.train.num_epochs,
             callbacks=[checkpoint_callback],
             logger=logger,
+            gradient_clip_val=1.0
         )
 
         # run training and validation

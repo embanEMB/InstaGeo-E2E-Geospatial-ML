@@ -205,7 +205,7 @@ class PrithviSeg(nn.Module):
                 ),
                 nn.BatchNorm2d(out_channels),
                 nn.ReLU(),
-                nn.Dropout2d(p=0.5)
+                nn.Dropout2d(p=0.3)
             )
 
         embed_dims = [

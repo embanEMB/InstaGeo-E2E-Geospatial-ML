@@ -36,6 +36,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
+from sklearn.metrics import roc_auc_score
 
 from instageo.model.dataloader import (
     InstaGeoDataset,
@@ -465,6 +466,7 @@ def compute_mean_std(data_loader: DataLoader) -> Tuple[List[float], List[float]]
     return mean.tolist(), std.tolist()  # type:ignore
 
 
+
 @hydra.main(config_path="configs", version_base=None, config_name="config")
 def main(cfg: DictConfig) -> None:
     """Runner Entry Point.
@@ -593,6 +595,32 @@ def main(cfg: DictConfig) -> None:
 
         # run training and validation
         trainer.fit(model, train_loader, valid_loader)
+
+        # ✅ ROC-AUC Evaluation
+        model.eval()
+        all_preds = []
+        all_labels = []
+
+        with torch.no_grad():
+            for batch in valid_loader:
+                inputs, labels = batch  # Adjust if your data has a different structure
+                outputs = model(inputs)
+                probs = torch.softmax(outputs, dim=1)[:, 1]  # Assuming binary classification
+                all_preds.extend(probs.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
+
+        roc_auc = roc_auc_score(all_labels, all_preds)
+
+        # ✅ Save ROC-AUC Score
+        roc_auc_path = f"{hydra_out_dir}/roc_auc_score.txt"
+        with open(roc_auc_path, "w") as f:
+            f.write(f"{roc_auc}\n")
+
+        # ✅ Save Best Model Checkpoint
+        best_model_path = f"{hydra_out_dir}/best_model.pth"
+        torch.save(model.state_dict(), best_model_path)
+
+        print(f"ROC-AUC Score: {roc_auc}")
 
     elif cfg.mode == "eval":
         check_required_flags(["root_dir", "test_filepath", "checkpoint_path"], cfg)

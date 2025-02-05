@@ -251,8 +251,8 @@ class PrithviSegmentationModule(pl.LightningModule):
             roc_auc = 0.5  # Fallback if ROC-AUC can't be computed (e.g., single class in batch)
 
         # Log loss and ROC-AUC
-        self.log("val_loss", loss, prog_bar=True)
-        self.log("val_roc_auc", roc_auc, prog_bar=True)
+        # self.log("val_loss", loss, prog_bar=True)
+        self.log_metrics("val_roc_auc", roc_auc, prog_bar=True)
         return loss
 
     def test_step(self, batch: Any, batch_idx: int) -> torch.Tensor:

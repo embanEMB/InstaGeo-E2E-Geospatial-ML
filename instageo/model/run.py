@@ -46,6 +46,7 @@ from instageo.model.dataloader import (
 )
 from instageo.model.infer_utils import chip_inference, sliding_window_inference
 from instageo.model.model import PrithviSeg
+from instageo.model.optim import gridsearch
 
 pl.seed_everything(seed=1042, workers=True)
 torch.backends.cudnn.deterministic = True
@@ -596,31 +597,81 @@ def main(cfg: DictConfig) -> None:
         # run training and validation
         trainer.fit(model, train_loader, valid_loader)
 
-        # ✅ ROC-AUC Evaluation
-        model.eval()
-        all_preds = []
-        all_labels = []
+    elif cfg.mode == "gridsearch":
+        
+        check_required_flags(["root_dir", "train_filepath", "valid_filepath"], cfg)
+        train_dataset = InstaGeoDataset(
+            filename=train_filepath,
+            input_root=root_dir,
+            preprocess_func=partial(
+                process_and_augment,
+                mean=MEAN,
+                std=STD,
+                temporal_size=TEMPORAL_SIZE,
+                im_size=IM_SIZE,
+            ),
+            bands=BANDS,
+            replace_label=cfg.dataloader.replace_label,
+            reduce_to_zero=cfg.dataloader.reduce_to_zero,
+            no_data_value=cfg.dataloader.no_data_value,
+            constant_multiplier=cfg.dataloader.constant_multiplier,
+        )
 
-        with torch.no_grad():
-            for batch in valid_loader:
-                inputs, labels = batch  # Adjust if your data has a different structure
-                outputs = model(inputs)
-                probs = torch.softmax(outputs, dim=1)[:, 1]  # Assuming binary classification
-                all_preds.extend(probs.cpu().numpy())
-                all_labels.extend(labels.cpu().numpy())
+        valid_dataset = InstaGeoDataset(
+            filename=valid_filepath,
+            input_root=root_dir,
+            preprocess_func=partial(
+                process_and_augment,
+                mean=MEAN,
+                std=STD,
+                temporal_size=TEMPORAL_SIZE,
+                im_size=IM_SIZE,
+            ),
+            bands=BANDS,
+            replace_label=cfg.dataloader.replace_label,
+            reduce_to_zero=cfg.dataloader.reduce_to_zero,
+            no_data_value=cfg.dataloader.no_data_value,
+            constant_multiplier=cfg.dataloader.constant_multiplier,
+        )
+        train_loader = create_dataloader(
+            train_dataset, batch_size=batch_size, shuffle=True, num_workers=1
+        )
+        valid_loader = create_dataloader(
+            valid_dataset, batch_size=batch_size, shuffle=False, num_workers=1
+        )
+        model = PrithviSegmentationModule(
+            image_size=IM_SIZE,
+            learning_rate=cfg.train.learning_rate,
+            freeze_backbone=cfg.model.freeze_backbone,
+            num_classes=cfg.model.num_classes,
+            temporal_step=cfg.dataloader.temporal_dim,
+            class_weights=cfg.train.class_weights,
+            ignore_index=cfg.train.ignore_index,
+            weight_decay=cfg.train.weight_decay,
+        )
+        hydra_out_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+        checkpoint_callback = ModelCheckpoint(
+            monitor="val_mIoU",
+            dirpath=hydra_out_dir,
+            filename="instageo_best_checkpoint",
+            auto_insert_metric_name=False,
+            mode="max",
+            save_top_k=1,
+        )
 
-        roc_auc = roc_auc_score(all_labels, all_preds)
+        logger = TensorBoardLogger(hydra_out_dir, name="instageo")
 
-        # ✅ Save ROC-AUC Score
-        roc_auc_path = f"{hydra_out_dir}/roc_auc_score.txt"
-        with open(roc_auc_path, "w") as f:
-            f.write(f"{roc_auc}\n")
+        trainer = pl.Trainer(
+            accelerator=get_device(),
+            max_epochs=cfg.train.num_epochs,
+            callbacks=[checkpoint_callback],
+            logger=logger,
+        )
 
-        # ✅ Save Best Model Checkpoint
-        best_model_path = f"{hydra_out_dir}/best_model.pth"
-        torch.save(model.state_dict(), best_model_path)
-
-        print(f"ROC-AUC Score: {roc_auc}")
+        # # run training and validation
+        # trainer.fit(model, train_loader, valid_loader)
+        gridsearch(model, trainer, train_loader, valid_loader)
+        # print("Gridsearch completed.")
 
     elif cfg.mode == "eval":
         check_required_flags(["root_dir", "test_filepath", "checkpoint_path"], cfg)

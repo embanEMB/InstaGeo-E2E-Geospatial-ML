@@ -639,6 +639,10 @@ def main(cfg: DictConfig) -> None:
         valid_loader = create_dataloader(
             valid_dataset, batch_size=batch_size, shuffle=False, num_workers=1
         )
+
+        test_loader = create_dataloader(
+            test_dataset, batch_size=batch_size, collate_fn=eval_collate_fn
+        )
         model = PrithviSegmentationModule(
             image_size=IM_SIZE,
             learning_rate=cfg.train.learning_rate,
@@ -670,7 +674,7 @@ def main(cfg: DictConfig) -> None:
 
         # # run training and validation
         # trainer.fit(model, train_loader, valid_loader)
-        gridsearch(model, trainer, train_loader, valid_loader, log=log)#, output_results_dir=cfg.output_results_dir)
+        gridsearch(model, trainer, train_loader, valid_loader, test_loader, log=log)#, output_results_dir=cfg.output_results_dir)
         # print("Gridsearch completed.")
 
     elif cfg.mode == "eval":

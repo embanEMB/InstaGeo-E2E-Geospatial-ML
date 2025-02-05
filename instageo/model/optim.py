@@ -2,7 +2,7 @@ import subprocess
 import os
 from sklearn.model_selection import ParameterGrid
 
-def gridsearch(model, trainer, train_loader, valid_loader, log):#, output_results_dir):
+def gridsearch(model, trainer, train_loader, valid_loader, test_loader, log):#, output_results_dir):
     param_grid = {
         'learning_rate': [1e-3, 1e-4, 1e-5],
         'batch_size': [8, 16, 32]
@@ -23,7 +23,7 @@ def gridsearch(model, trainer, train_loader, valid_loader, log):#, output_result
         model.batch_size = params['batch_size']
         trainer.fit(model, train_loader, valid_loader)
         # get metrics
-        result = trainer.test(model, dataloaders=valid_loader)
+        result = trainer.test(model, dataloaders=test_loader)
         metrics = log.info(f"Evaluation results:\n{result}")
         results.append((params, metrics))#trainer.callback_metrics['val_loss']))
         # create and write in the txt file

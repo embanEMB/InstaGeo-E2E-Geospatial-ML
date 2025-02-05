@@ -10,7 +10,8 @@ def gridsearch(model, trainer, train_loader, valid_loader):
 
     grid = ParameterGrid(param_grid)
     results = []
-    output_results_dir = "/home/poscalice/GeoAI/InstaGeo-E2E-Geospatial-ML/instageo/data/optim/"
+    # output_results_dir = "/home/poscalice/GeoAI/InstaGeo-E2E-Geospatial-ML/instageo/data/optim/"
+    output_results_dir = "/kaggle/working/outputs/gridsearch"
     # Ensure the output directory exists
     os.makedirs(output_results_dir, exist_ok=True)
     results_path = os.path.join(output_results_dir, "gridsearch.txt")

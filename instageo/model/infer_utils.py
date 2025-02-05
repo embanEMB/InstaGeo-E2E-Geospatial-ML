@@ -28,6 +28,7 @@ import rasterio
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import torch
 
 from instageo.model.dataloader import crop_array
 
@@ -175,3 +176,4 @@ def chip_inference(
                 ]
                 for future in futures:
                     future.result()
+

@@ -32,10 +32,12 @@ import rasterio
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig, OmegaConf
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, ModelSummary, ProgressBar
 from pytorch_lightning.loggers import TensorBoardLogger
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from tqdm import tqdm
+import random
+from collections import Counter
 
 from instageo.model.dataloader import (
     InstaGeoDataset,
@@ -113,11 +115,6 @@ def infer_collate_fn(batch: tuple[torch.Tensor]) -> tuple[torch.Tensor, torch.Te
     filepaths = [a[1] for a in batch]
     return (data, labels), filepaths
 
-import torch
-from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
-import random
-from collections import Counter
-
 def build_random_weighted_sampler(dataset: Dataset,  subset_size=None, seed: int = None):
 
     """
@@ -132,7 +129,7 @@ def build_random_weighted_sampler(dataset: Dataset,  subset_size=None, seed: int
             sampler: A WeightedRandomSampler for balanced class sampling.
             class_weights: Inversely propotional class weights for imbalance dataset. 
     """
-
+    print("Computing Weighted Random Sampler !")
     if seed is not None : random.seed(seed) 
     # Determine subset of dataset to analyze (optional)
     if subset_size is not None:
@@ -175,7 +172,7 @@ def create_dataloader(
     num_workers: int = 1,
     collate_fn: Optional[Callable] = None,
     pin_memory: bool = True,
-    random_sampler=False
+    random_sampler : bool = False
 ) -> DataLoader:
     """Create a DataLoader for the given dataset.
 
@@ -194,17 +191,20 @@ def create_dataloader(
     Returns:
         DataLoader: An instance of the PyTorch DataLoader.
     """
-    if not random_sampler:
-        sampler = build_random_weighted_sampler(Dataset,  subset_size=1000, seed = 42)
+    if random_sampler:
+        sampler = build_random_weighted_sampler(
+                    dataset,  
+                    subset_size=100, 
+                    seed = 42
+                )
         return DataLoader(
             dataset,
             batch_size=batch_size,
             num_workers=num_workers,
             collate_fn=collate_fn,
-            sampler = sampler,
+            sampler=sampler,
             pin_memory=pin_memory,
         )
-
     else:
         return DataLoader(
             dataset,
@@ -624,10 +624,11 @@ def main(cfg: DictConfig) -> None:
             constant_multiplier=cfg.dataloader.constant_multiplier,
         )
         train_loader = create_dataloader(
-            train_dataset, batch_size=batch_size, shuffle=True, num_workers=1
+            train_dataset, batch_size=batch_size, shuffle=True, num_workers=cfg.train.number_workers, 
+            random_sampler=cfg.train.random_sampler
         )
         valid_loader = create_dataloader(
-            valid_dataset, batch_size=batch_size, shuffle=False, num_workers=1
+            valid_dataset, batch_size=batch_size, shuffle=False, num_workers=cfg.train.number_workers
         )
         model = PrithviSegmentationModule(
             image_size=IM_SIZE,
@@ -640,6 +641,7 @@ def main(cfg: DictConfig) -> None:
             weight_decay=cfg.train.weight_decay,
         )
         hydra_out_dir = hydra.core.hydra_config.HydraConfig.get().runtime.output_dir
+        print("Hydra output directory : ", hydra_out_dir)
         checkpoint_callback = ModelCheckpoint(
             monitor="val_mIoU",
             dirpath=hydra_out_dir,
@@ -650,12 +652,27 @@ def main(cfg: DictConfig) -> None:
         )
 
         logger = TensorBoardLogger(hydra_out_dir, name="instageo")
+        
+        if cfg.train.mixed_precision:
+            device = get_device() 
+            if device == "cpu":
+                precision = "bf16-mixed"
+            elif device == "gpu":
+                precision = "16-mixed"
+            elif device == "tpu":
+                precision = 16
+            else:
+                precision = None
+        else:
+            precision = None
 
         trainer = pl.Trainer(
             accelerator=get_device(),
             max_epochs=cfg.train.num_epochs,
             callbacks=[checkpoint_callback],
             logger=logger,
+            precision=precision,
+            check_val_every_n_epoch=1,
         )
 
         # run training and validation
@@ -696,7 +713,7 @@ def main(cfg: DictConfig) -> None:
             ignore_index=cfg.train.ignore_index,
             weight_decay=cfg.train.weight_decay,
         )
-        trainer = pl.Trainer(accelerator=get_device())
+        trainer = pl.Trainer(accelerator=get_device(), enable_progress_bar=True)
         result = trainer.test(model, dataloaders=test_loader)
         log.info(f"Evaluation results:\n{result}")
 
@@ -810,7 +827,6 @@ def main(cfg: DictConfig) -> None:
             weight_decay=cfg.train.weight_decay,
         )
         chip_inference(test_loader, output_dir, model, device=get_device())
-
 
 if __name__ == "__main__":
     main()

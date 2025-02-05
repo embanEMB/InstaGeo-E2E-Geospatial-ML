@@ -25,7 +25,7 @@ def gridsearch(model, trainer, train_loader, valid_loader, log):#, output_result
         # get metrics
         result = trainer.test(model, dataloaders=valid_loader)
         metrics = log.info(f"Evaluation results:\n{result}")
-        results.append((params, result[0]["test_aAcc_epoch"]))#trainer.callback_metrics['val_loss']))
+        results.append((params, result[-1]["test_aAcc_epoch"]))#trainer.callback_metrics['val_loss']))
         # create and write in the txt file
         with open(results_path, "a") as f:
             f.write(f"{results[-1]}\n")

@@ -670,7 +670,7 @@ def main(cfg: DictConfig) -> None:
 
         # # run training and validation
         # trainer.fit(model, train_loader, valid_loader)
-        gridsearch(model, trainer, train_loader, valid_loader)
+        gridsearch(model, trainer, train_loader, valid_loader, log=log, output_results_dir=cfg.output_results_dir)
         # print("Gridsearch completed.")
 
     elif cfg.mode == "eval":

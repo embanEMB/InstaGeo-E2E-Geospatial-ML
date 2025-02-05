@@ -2,7 +2,7 @@ import subprocess
 import os
 from sklearn.model_selection import ParameterGrid
 
-def gridsearch(model, trainer, train_loader, valid_loader, log):
+def gridsearch(model, trainer, train_loader, valid_loader, log, output_results_dir):
     param_grid = {
         'learning_rate': [1e-3, 1e-4, 1e-5],
         'batch_size': [8, 16, 32]
@@ -10,7 +10,7 @@ def gridsearch(model, trainer, train_loader, valid_loader, log):
 
     grid = ParameterGrid(param_grid)
     results = []
-    output_results_dir = "/home/poscalice/GeoAI/InstaGeo-E2E-Geospatial-ML/instageo/data/optim/"
+    # output_results_dir = "/home/poscalice/GeoAI/InstaGeo-E2E-Geospatial-ML/instageo/data/optim/"
     # output_results_dir = "/kaggle/working/outputs/gridsearch"
     # Ensure the output directory exists
     os.makedirs(output_results_dir, exist_ok=True)

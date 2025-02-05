@@ -37,6 +37,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 from sklearn.metrics import roc_auc_score
+import torch.nn.functional as F
 
 from instageo.model.dataloader import (
     InstaGeoDataset,
@@ -236,6 +237,22 @@ class PrithviSegmentationModule(pl.LightningModule):
         outputs = self.forward(inputs)
         loss = self.criterion(outputs, labels.long())
         self.log_metrics(outputs, labels, "val", loss)
+
+        # Compute probabilities for ROC-AUC
+        if outputs.shape[1] == 1:  # Binary classification
+            probs = torch.sigmoid(outputs).squeeze()
+        else:  # Multi-class classification
+            probs = F.softmax(outputs, dim=1)[:, 1]  # Probability of class 1
+
+        # Compute ROC-AUC
+        try:
+            roc_auc = roc_auc_score(labels.cpu().numpy(), probs.detach().cpu().numpy())
+        except ValueError:
+            roc_auc = 0.5  # Fallback if ROC-AUC can't be computed (e.g., single class in batch)
+
+        # Log loss and ROC-AUC
+        self.log("val_loss", loss, prog_bar=True)
+        self.log("val_roc_auc", roc_auc, prog_bar=True)
         return loss
 
     def test_step(self, batch: Any, batch_idx: int) -> torch.Tensor:
@@ -643,7 +660,7 @@ def main(cfg: DictConfig) -> None:
         # test_loader = create_dataloader(
         #     test_dataset, batch_size=batch_size, collate_fn=eval_collate_fn
         # )
-        
+
         model = PrithviSegmentationModule(
             image_size=IM_SIZE,
             learning_rate=cfg.train.learning_rate,

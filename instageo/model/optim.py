@@ -26,7 +26,7 @@ def gridsearch(model, trainer, train_loader, valid_loader, log):#, output_result
         # get metrics
         # After training
         metrics = trainer.callback_metrics
-        val_auc = metrics.get("val_auc", None)
+        val_auc = metrics.get("val_roc_auc", None)
         print(f"Validation ROC-AUC: {val_auc}")
         assert False
 

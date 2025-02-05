@@ -2,7 +2,7 @@ import subprocess
 import os
 from sklearn.model_selection import ParameterGrid
 
-def gridsearch(model, trainer, train_loader, valid_loader):
+def gridsearch(model, trainer, train_loader, valid_loader, log):
     param_grid = {
         'learning_rate': [1e-3, 1e-4, 1e-5],
         'batch_size': [8, 16, 32]
@@ -10,8 +10,8 @@ def gridsearch(model, trainer, train_loader, valid_loader):
 
     grid = ParameterGrid(param_grid)
     results = []
-    # output_results_dir = "/home/poscalice/GeoAI/InstaGeo-E2E-Geospatial-ML/instageo/data/optim/"
-    output_results_dir = "/kaggle/working/outputs/gridsearch"
+    output_results_dir = "/home/poscalice/GeoAI/InstaGeo-E2E-Geospatial-ML/instageo/data/optim/"
+    # output_results_dir = "/kaggle/working/outputs/gridsearch"
     # Ensure the output directory exists
     os.makedirs(output_results_dir, exist_ok=True)
     results_path = os.path.join(output_results_dir, "gridsearch.txt")
@@ -22,7 +22,10 @@ def gridsearch(model, trainer, train_loader, valid_loader):
         model.learning_rate = params['learning_rate']
         model.batch_size = params['batch_size']
         trainer.fit(model, train_loader, valid_loader)
-        results.append((params, trainer.callback_metrics['val_loss']))
+        # get metrics
+        result = trainer.test(model, dataloaders=valid_loader)
+        metrics = log.info(f"Evaluation results:\n{result}")
+        results.append((params, metrics))#trainer.callback_metrics['val_loss']))
         # create and write in the txt file
         with open(results_path, "a") as f:
             f.write(f"{results[-1]}\n")
